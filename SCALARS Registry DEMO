@@ -1,0 +1,1061 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Activity, 
+  Database, 
+  Cpu, 
+  Globe, 
+  FileJson, 
+  Vote, 
+  Settings, 
+  Menu, 
+  X, 
+  Zap, 
+  Layers, 
+  Code, 
+  Key, 
+  Terminal, 
+  Box, 
+  ArrowRightLeft,
+  Search,
+  CheckCircle,
+  AlertCircle,
+  Lock,
+  Filter,
+  Sparkles,
+  Loader2,
+  MessageSquare,
+  Play,
+  TrendingUp,
+  Leaf,
+  HeartPulse,
+  ShieldCheck,
+  RefreshCw,
+  Thermometer,
+  Monitor,
+  Smartphone,
+  Power,
+  TerminalSquare,
+  ChevronRight,
+  Fingerprint
+} from 'lucide-react';
+
+// --- MOCK DATA ---
+
+const INITIAL_REGISTRY = [
+  { id: 'RING-J', name: 'Ring Joule', symbol: 'RING-J', category: 'Physical Sciences', rate: 0.05, status: 'Active', supply: '500M' },
+  { id: 'ENG-KWH', name: 'Kilowatt Hour', symbol: 'ENG-KWH', category: 'Physical Sciences', rate: 0.15, status: 'Active', supply: '2.1B' },
+  { id: 'RES-HZ', name: 'Resonance Hertz', symbol: 'RES-HZ', category: 'Time & Events', rate: 1.20, status: 'Active', supply: '10M' },
+  { id: 'AI-FLOP', name: 'Neural Flop', symbol: 'AI-FLOP', category: 'Digital & Data', rate: 0.02, status: 'Active', supply: '100B' },
+  { id: 'ATMOS-P', name: 'Atmos Pascal', symbol: 'ATMOS-P', category: 'Environmental & Ecological', rate: 0.001, status: 'Syncing', supply: '1B' },
+  { id: 'HEAL-DOSE', name: 'Healing Dosage', symbol: 'HEAL-DOSE', category: 'Health & Wellness', rate: 0.10, status: 'Active', supply: '2.5M' },
+  { id: 'RNG', name: 'Rung Governance', symbol: 'RNG', category: 'Economic & Financial', rate: 2.50, status: 'Active', supply: '100M' },
+  { id: 'INT-KJ', name: 'Intimacy Kilojoule', symbol: 'INT-KJ', category: 'Economic & Financial', rate: 0.08, status: 'Active', supply: '50M' },
+  { id: 'BETS-432', name: 'BETS 432Hz Script', symbol: 'BETS-432', category: 'Custom / Creator', rate: 5.00, status: 'Pending', supply: '10k' },
+];
+
+const INITIAL_PROPOSALS = [
+  { id: 101, title: 'Update RING-J Conversion Rate', description: 'Lower rate from 0.05 to 0.045 SCALAR to stimulate energy usage.', votesFor: 125000, votesAgainst: 45000, status: 'Active', endsIn: '2 days' },
+  { id: 102, title: 'Register TERRA-EFF Unit', description: 'Add "Terraforming Efficiency" to Environmental category.', votesFor: 89000, votesAgainst: 12000, status: 'Passed', endsIn: 'Ended' },
+];
+
+const USER_WALLET = {
+  address: '0x71C...9A23',
+  scalarBalance: 15420.50,
+  stakedBalance: 5000.00,
+  holdings: [
+    { symbol: 'RES-HZ', amount: 1200 },
+    { symbol: 'RING-J', amount: 50000 },
+    { symbol: 'RNG', amount: 3500 },
+    { symbol: 'INT-KJ', amount: 450 },
+  ]
+};
+
+const HARVEST_NODES = [
+  { id: 'NODE-01', type: 'Erobot Model X', status: 'Online', yield: 'High', coEvolScore: 92, sentinel: true },
+  { id: 'NODE-02', type: 'Bio-Sensor Array', status: 'Syncing', yield: 'Moderate', coEvolScore: 78, sentinel: true },
+];
+
+// --- GEMINI API UTILS ---
+
+const GEMINI_API_KEY = ""; // Set at runtime
+
+const callGemini = async (prompt, systemInstruction = "") => {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+        }),
+      }
+    );
+
+    if (!response.ok) throw new Error("API call failed");
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+  } catch (error) {
+    console.error("Gemini Error:", error);
+    return null;
+  }
+};
+
+// --- SKEUOMORPHIC UI COMPONENTS ---
+
+const SkeuoCard = ({ children, className = "" }) => (
+  <div className={`relative bg-slate-800/40 backdrop-blur-2xl border-t border-l border-white/20 border-b border-r border-black/60 rounded-[2rem] p-6 shadow-[10px_10px_20px_rgba(0,0,0,0.5),_-5px_-5px_15px_rgba(255,255,255,0.05)] overflow-hidden ${className}`}>
+    <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/20 pointer-events-none" />
+    <div className="relative z-10">{children}</div>
+  </div>
+);
+
+const SkeuoScreen = ({ children, className = "" }) => (
+  <div className={`bg-black/80 rounded-2xl p-4 shadow-[inset_0_5px_15px_rgba(0,0,0,1),_0_1px_0_rgba(255,255,255,0.15)] border border-black/90 relative ${className}`}>
+    {/* Screen glare overlay */}
+    <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent rounded-2xl pointer-events-none opacity-50" />
+    <div className="relative z-10 h-full">{children}</div>
+  </div>
+);
+
+const SkeuoButton = ({ children, onClick, disabled, className = "", active = false, color = "indigo" }) => {
+  const baseColors = {
+    indigo: 'from-indigo-600 to-indigo-800 border-indigo-400/50',
+    rose: 'from-rose-600 to-rose-800 border-rose-400/50',
+    emerald: 'from-emerald-600 to-emerald-800 border-emerald-400/50',
+    amber: 'from-amber-500 to-amber-700 border-amber-300/50',
+    slate: 'from-slate-700 to-slate-900 border-slate-500/50',
+  };
+  
+  return (
+    <button 
+      onClick={onClick}
+      disabled={disabled}
+      className={`relative px-6 py-3 rounded-xl font-bold tracking-wide transition-all duration-150 flex items-center justify-center gap-2 text-white
+      ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110 active:translate-y-1 active:shadow-[inset_0_4px_8px_rgba(0,0,0,0.6)]'}
+      ${active ? `bg-black/40 shadow-[inset_0_4px_8px_rgba(0,0,0,0.8)] border-t border-black border-b border-white/10 text-${color}-400` : `bg-gradient-to-b ${baseColors[color]} shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),_0_6px_12px_rgba(0,0,0,0.5)] border-t border-x border-b-2 border-b-black/80`}
+      ${className}`}
+    >
+      {children}
+    </button>
+  )
+};
+
+const LED = ({ color = 'green', pulse = false }) => {
+  const colors = {
+    green: 'bg-emerald-500 shadow-[inset_0_1px_3px_rgba(255,255,255,0.6),_0_0_12px_#10b981]',
+    red: 'bg-rose-500 shadow-[inset_0_1px_3px_rgba(255,255,255,0.6),_0_0_12px_#f43f5e]',
+    yellow: 'bg-amber-400 shadow-[inset_0_1px_3px_rgba(255,255,255,0.6),_0_0_12px_#fbbf24]',
+    blue: 'bg-cyan-500 shadow-[inset_0_1px_3px_rgba(255,255,255,0.6),_0_0_12px_#06b6d4]',
+  };
+  return (
+    <div className={`w-3 h-3 rounded-full border border-black/50 ${colors[color]} ${pulse ? 'animate-pulse' : ''}`} />
+  );
+};
+
+const Badge = ({ status }) => {
+  const colors = {
+    Active: 'text-emerald-400',
+    Passed: 'text-cyan-400',
+    Ended: 'text-gray-400',
+    Pending: 'text-amber-400',
+    Online: 'text-emerald-400',
+    Syncing: 'text-amber-400',
+  };
+  return (
+    <div className="flex items-center gap-2 bg-black/50 px-3 py-1 rounded-lg border border-white/5 shadow-inner">
+       <LED color={status === 'Active' || status === 'Online' ? 'green' : status === 'Pending' || status === 'Syncing' ? 'yellow' : 'blue'} pulse={status === 'Syncing' || status === 'Pending'} />
+       <span className={`text-[10px] font-black tracking-widest uppercase ${colors[status] || colors.Ended}`}>{status}</span>
+    </div>
+  );
+};
+
+// --- MAIN APP COMPONENT ---
+
+export default function ScalarsApp() {
+  const [appFormat, setAppFormat] = useState('web'); // 'web' | 'mobile'
+  const [activeTab, setActiveTab] = useState('registry');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  const [wallet, setWallet] = useState(USER_WALLET);
+  const [registry, setRegistry] = useState(INITIAL_REGISTRY);
+  const [proposals, setProposals] = useState(INITIAL_PROPOSALS);
+  const [notifications, setNotifications] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [governanceAnalysis, setGovernanceAnalysis] = useState({});
+  const [apiKeys, setApiKeys] = useState([{ key: 'sk_live_51M...9x2', name: 'Cymos Mainnet App' }]);
+
+  const addNotification = (msg, type = 'success') => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, msg, type }]);
+    setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000);
+  };
+
+  const NavItem = ({ id, label, icon: Icon }) => (
+    <button
+      onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
+      className={`w-full flex items-center space-x-4 px-5 py-3.5 rounded-2xl transition-all duration-300 relative group
+        ${activeTab === id 
+          ? 'bg-black/40 shadow-[inset_0_2px_10px_rgba(0,0,0,0.8),_0_1px_0_rgba(255,255,255,0.1)] border border-black/50' 
+          : 'hover:bg-white/5 border border-transparent'}
+      `}
+    >
+      {activeTab === id && <div className="absolute left-2 w-1.5 h-8 bg-indigo-500 rounded-full shadow-[0_0_10px_#6366f1]" />}
+      <div className={`p-2 rounded-xl border ${activeTab === id ? 'bg-indigo-500/20 border-indigo-400/30' : 'bg-slate-800/50 border-white/5 group-hover:bg-slate-700/50'}`}>
+        <Icon size={18} className={activeTab === id ? "text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]" : "text-slate-400"} />
+      </div>
+      <span className={`font-bold tracking-wide text-sm ${activeTab === id ? 'text-white' : 'text-slate-400'}`}>{label}</span>
+    </button>
+  );
+
+  const MobileNavBtn = ({ id, icon: Icon, label }) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all duration-300 relative
+        ${activeTab === id 
+          ? 'bg-black/60 shadow-[inset_0_4px_10px_rgba(0,0,0,0.8),_0_1px_0_rgba(255,255,255,0.1)] border-t border-black' 
+          : 'bg-gradient-to-b from-slate-700/50 to-slate-800/50 border-t border-white/10 shadow-[0_4px_10px_rgba(0,0,0,0.3)]'}
+      `}
+    >
+      <Icon size={22} className={activeTab === id ? "text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]" : "text-slate-400"} />
+      <span className={`text-[9px] mt-1 font-bold ${activeTab === id ? 'text-indigo-300' : 'text-slate-500'}`}>{label}</span>
+      {activeTab === id && <div className="absolute top-1 w-4 h-1 bg-indigo-500 rounded-full shadow-[0_0_8px_#6366f1]" />}
+    </button>
+  )
+
+  const categories = ['All', 'Physical Sciences', 'Time & Events', 'Digital & Data', 'Environmental & Ecological', 'Health & Wellness', 'Creative & Cultural', 'Economic & Financial', 'Custom / Creator'];
+  const filteredRegistry = registry.filter(token => {
+    const matchesSearch = token.name.toLowerCase().includes(searchTerm.toLowerCase()) || token.symbol.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'All' || token.category.includes(selectedCategory);
+    return matchesSearch && matchesCategory;
+  });
+
+  // --- VIEWS ---
+
+  const DashboardView = () => {
+    const [simScenario, setSimScenario] = useState("");
+    const [simResult, setSimResult] = useState("");
+    const [simLoading, setSimLoading] = useState(false);
+
+    const runSimulation = async () => {
+      if (!simScenario.trim()) return;
+      setSimLoading(true);
+      const prompt = `Simulate the economic impact on the Cymos Scalar ecosystem given this scenario: "${simScenario}". 
+      Predict impacts on SCALAR price, Network Energy, and Governance stability. Keep it concise (max 3 bullets).`;
+      const res = await callGemini(prompt, "You are a sophisticated economic simulation engine.");
+      setSimResult(res);
+      setSimLoading(false);
+    };
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold text-white tracking-tight drop-shadow-md">Command Center</h1>
+            <p className="text-indigo-300/80 font-medium text-sm mt-1 uppercase tracking-widest flex items-center gap-2">
+              <LED color="green" pulse/> System Online
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <SkeuoButton color="slate" className="text-xs px-4"><ArrowRightLeft size={16} /> Bridge</SkeuoButton>
+            <SkeuoButton color="indigo" className="text-xs px-4" onClick={() => setActiveTab('mint')}><Zap size={16} /> Mint ASMT</SkeuoButton>
+          </div>
+        </div>
+
+        {/* Ring Stats Cards - Skeuo Dials/Readouts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <SkeuoCard className="flex flex-col">
+             <div className="flex items-center gap-2 mb-4 text-slate-400 font-bold uppercase text-xs tracking-wider">
+               <Activity size={16}/> SCALAR Price
+             </div>
+             <SkeuoScreen className="flex-1 flex flex-col justify-center items-center">
+                <h3 className="text-4xl font-mono font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">$1.24</h3>
+                <span className="text-emerald-500 text-xs font-bold mt-2 bg-emerald-900/40 px-2 py-1 rounded border border-emerald-500/20">+2.4% (24h)</span>
+             </SkeuoScreen>
+          </SkeuoCard>
+
+          <SkeuoCard className="flex flex-col relative">
+             <div className="flex items-center gap-2 mb-4 text-slate-400 font-bold uppercase text-xs tracking-wider">
+               <Zap size={16}/> Network Energy
+             </div>
+             <SkeuoScreen className="flex-1 flex flex-col justify-center items-center overflow-hidden">
+                <div className="w-32 h-16 relative overflow-hidden flex items-end justify-center mb-2">
+                   <div className="absolute top-0 w-32 h-32 border-[10px] border-black rounded-full shadow-[inset_0_2px_5px_rgba(255,255,255,0.2)]"></div>
+                   <div className="absolute top-0 w-32 h-32 border-[10px] border-orange-500 rounded-full drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]" style={{clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 50%)', transform: 'rotate(70deg)'}}></div>
+                   <div className="w-4 h-4 bg-white rounded-full z-10 shadow-md"></div>
+                </div>
+                <h3 className="text-2xl font-mono font-black text-orange-400">842 TJ</h3>
+             </SkeuoScreen>
+          </SkeuoCard>
+
+          <SkeuoCard className="flex flex-col">
+             <div className="flex items-center gap-2 mb-4 text-slate-400 font-bold uppercase text-xs tracking-wider">
+               <Database size={16}/> Active ASMTs
+             </div>
+             <SkeuoScreen className="flex-1 flex flex-col justify-center items-center">
+                <h3 className="text-4xl font-mono font-black text-cyan-400 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">1,042</h3>
+                <span className="text-slate-400 text-xs font-bold mt-2">Registers</span>
+             </SkeuoScreen>
+          </SkeuoCard>
+
+          <SkeuoCard className="flex flex-col">
+             <div className="flex items-center gap-2 mb-4 text-slate-400 font-bold uppercase text-xs tracking-wider">
+               <Lock size={16}/> Total Staked
+             </div>
+             <SkeuoScreen className="flex-1 flex flex-col justify-center items-center">
+                <h3 className="text-3xl font-mono font-black text-indigo-400 drop-shadow-[0_0_10px_rgba(99,102,241,0.5)]">5.0k</h3>
+                <span className="text-indigo-300 text-xs font-bold mt-2">VP Power</span>
+             </SkeuoScreen>
+          </SkeuoCard>
+        </div>
+
+        <SkeuoCard>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-indigo-900/50 rounded-lg border border-indigo-500/30 shadow-inner">
+               <TrendingUp className="text-indigo-400" size={20} />
+            </div>
+            <h3 className="text-xl font-bold text-white tracking-wide">Market Simulator Engine</h3>
+            <LED color="yellow" pulse/>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+            <div className="md:col-span-2 space-y-4">
+              <SkeuoScreen className="h-32 p-1">
+                <textarea 
+                  className="w-full h-full bg-transparent border-none p-3 text-sm text-indigo-200 placeholder-indigo-900 focus:outline-none resize-none font-mono"
+                  placeholder="> Enter threat scenario matrix..."
+                  value={simScenario}
+                  onChange={(e) => setSimScenario(e.target.value)}
+                />
+              </SkeuoScreen>
+              <SkeuoButton onClick={runSimulation} disabled={simLoading} className="w-full text-sm" color="indigo">
+                {simLoading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
+                INITIATE SIMULATION
+              </SkeuoButton>
+            </div>
+            <div className="md:col-span-3">
+               <SkeuoScreen className="h-full min-h-[160px] flex flex-col">
+                 <div className="border-b border-white/10 pb-2 mb-3 flex items-center justify-between">
+                    <span className="text-xs text-indigo-400 font-bold uppercase tracking-widest">Telemetry Output</span>
+                    <LED color={simResult ? "green" : "red"} />
+                 </div>
+                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                   {simResult ? (
+                     <div className="text-sm text-indigo-100 font-mono leading-relaxed whitespace-pre-line">{simResult}</div>
+                   ) : (
+                     <div className="h-full flex flex-col items-center justify-center text-slate-700">
+                       <Activity size={36} className="mb-3 opacity-30" />
+                       <span className="text-xs font-mono font-bold uppercase tracking-widest">Awaiting Parameters</span>
+                     </div>
+                   )}
+                 </div>
+               </SkeuoScreen>
+            </div>
+          </div>
+        </SkeuoCard>
+      </div>
+    );
+  };
+
+  const RegistryView = () => {
+    const [askQuery, setAskQuery] = useState("");
+    const [askAnswer, setAskAnswer] = useState("");
+    const [askLoading, setAskLoading] = useState(false);
+    
+    // Schema Inspector State
+    const [selectedSchema, setSelectedSchema] = useState(null);
+    const [activationLogs, setActivationLogs] = useState([]);
+    const [isActivating, setIsActivating] = useState(false);
+
+    const askRegistry = async () => {
+      if (!askQuery.trim()) return;
+      setAskLoading(true);
+      const context = registry.map(r => `${r.name} (${r.symbol}): ${r.category}, Rate ${r.rate}`).join('\n');
+      const prompt = `You are Dr. Scalar, an expert on the Cymos Magnitude Registry. Registry Context: ${context}. User Question: "${askQuery}"`;
+      const res = await callGemini(prompt);
+      setAskAnswer(res);
+      setAskLoading(false);
+    };
+
+    // Generates a mock JSON schema based on the patent specifications
+    const generateSchemaData = (token) => ({
+      "$schema": "https://scalars.io/schema/magnitude-registry.schema.json",
+      "$id": `https://registry.cymos.planet/schemas/${token.symbol.toLowerCase()}-v1.json`,
+      "title": `${token.symbol}: ${token.name} Definition`,
+      "type": "object",
+      "properties": {
+        "name": { "const": token.name },
+        "symbol": { "const": token.symbol },
+        "category": { "const": token.category },
+        "conversionRateToSCALAR": { "type": "number", "const": token.rate },
+        "measurement_bounds": {
+          "type": "object",
+          "properties": { "min_value": { "const": 0.000001 }, "max_value": { "const": 1000000000.0 } }
+        },
+        "governance": { "dao_address": "0xScalarRingDAO_Address" }
+      }
+    });
+
+    const handleActivateProtocol = async () => {
+      setIsActivating(true);
+      setActivationLogs(["> INITIATING PROTOCOL HANDSHAKE..."]);
+      
+      const steps = [
+        "> RESOLVING SCHEMA SIGNATURE...",
+        `> LOCATING METADATA AT: ipfs://${selectedSchema.symbol.toLowerCase()}-hash`,
+        "> CALIBRATING LOCAL ORACLES TO SCALAR BOUNDS...",
+        "> AWAITING DAG LEDGER CONFIRMATION...",
+        "> PROTOCOL ACTIVATED AND SYNCED."
+      ];
+
+      for (let i = 0; i < steps.length; i++) {
+        await new Promise(r => setTimeout(r, 800)); // Physical delay simulation
+        setActivationLogs(prev => [...prev, steps[i]]);
+      }
+
+      setIsActivating(false);
+      
+      // Update global registry to active
+      setRegistry(prev => prev.map(t => 
+        t.id === selectedSchema.id ? { ...t, status: 'Active' } : t
+      ));
+      
+      addNotification(`${selectedSchema.symbol} Activated Successfully`);
+      setTimeout(() => setSelectedSchema(null), 1500); // Auto close after success
+    };
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500 relative">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold text-white tracking-tight drop-shadow-md">Global Registry</h1>
+            <p className="text-indigo-300/80 font-medium text-sm mt-1 uppercase tracking-widest">Verified Planet Standards</p>
+          </div>
+          <div className="flex gap-4 w-full md:w-auto bg-black/40 p-2 rounded-2xl border border-white/10 shadow-[inset_0_2px_5px_rgba(0,0,0,0.5)]">
+              <div className="relative flex-1 md:w-64">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500" size={16} />
+                  <input 
+                      type="text" 
+                      placeholder="Search Data Banks..." 
+                      className="w-full pl-9 pr-4 py-2 bg-transparent text-white placeholder-slate-600 focus:outline-none font-mono text-sm" 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+              </div>
+              <div className="w-px bg-white/10 mx-1"></div>
+              <select 
+                  className="bg-transparent text-indigo-300 focus:outline-none font-bold text-sm uppercase tracking-wide cursor-pointer pr-2 appearance-none"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+              >
+                  {categories.map(cat => <option key={cat} value={cat} className="bg-slate-900">{cat}</option>)}
+              </select>
+          </div>
+        </div>
+
+        {/* AI Query Interface */}
+        <SkeuoCard className="flex flex-col md:flex-row gap-6 p-5 border-t-indigo-500/50">
+            <div className="flex-1">
+               <div className="flex items-center gap-3 mb-4">
+                 <div className="w-10 h-10 rounded-full bg-indigo-900/50 border border-indigo-400/30 flex items-center justify-center shadow-inner">
+                    <Sparkles className="text-indigo-400" size={18} />
+                 </div>
+                 <h4 className="text-white font-bold tracking-widest uppercase">Dr. Scalar AI</h4>
+               </div>
+               <div className="flex gap-3">
+                 <SkeuoScreen className="flex-1 p-1 pl-3 flex items-center h-12">
+                   <input 
+                     type="text" 
+                     value={askQuery}
+                     onChange={(e) => setAskQuery(e.target.value)}
+                     onKeyDown={(e) => e.key === 'Enter' && askRegistry()}
+                     placeholder="Query registry protocol..."
+                     className="w-full bg-transparent text-sm text-indigo-200 placeholder-indigo-900 focus:outline-none font-mono"
+                   />
+                 </SkeuoScreen>
+                 <SkeuoButton onClick={askRegistry} disabled={askLoading} color="indigo" className="w-14 h-12 !p-0">
+                    {askLoading ? <Loader2 size={18} className="animate-spin" /> : <MessageSquare size={18} />}
+                 </SkeuoButton>
+               </div>
+            </div>
+            {askAnswer && (
+              <SkeuoScreen className="flex-1 animate-in fade-in slide-in-from-right-4 min-h-[100px]">
+                 <div className="border-b border-indigo-500/30 pb-2 mb-2"><span className="text-[10px] font-bold text-indigo-400 tracking-widest uppercase">Response Node</span></div>
+                 <p className="text-sm text-indigo-100 font-mono leading-relaxed">{askAnswer}</p>
+              </SkeuoScreen>
+            )}
+        </SkeuoCard>
+
+        {/* Databank Table */}
+        <SkeuoCard className="p-0 overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[800px]">
+              <thead>
+                <tr className="bg-black/60 border-b-2 border-slate-700/50 shadow-inner">
+                  <th className="p-5 text-xs font-black uppercase tracking-widest text-slate-500">Symbol</th>
+                  <th className="p-5 text-xs font-black uppercase tracking-widest text-slate-500">Classification</th>
+                  <th className="p-5 text-xs font-black uppercase tracking-widest text-slate-500">Rate</th>
+                  <th className="p-5 text-xs font-black uppercase tracking-widest text-slate-500">Telemetry</th>
+                  <th className="p-5 text-xs font-black uppercase tracking-widest text-slate-500 text-right">Access</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 bg-black/20">
+                {filteredRegistry.map((token) => (
+                  <tr key={token.id} className="hover:bg-indigo-500/10 transition-colors group cursor-pointer">
+                    <td className="p-5">
+                       <div className="inline-block bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 shadow-inner">
+                         <span className="font-mono text-indigo-400 font-bold tracking-widest">{token.symbol}</span>
+                       </div>
+                    </td>
+                    <td className="p-5">
+                       <div className="text-white font-bold text-sm tracking-wide">{token.name}</div>
+                       <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">{token.category}</div>
+                    </td>
+                    <td className="p-5 text-white font-mono font-medium">{token.rate}</td>
+                    <td className="p-5"><Badge status={token.status} /></td>
+                    <td className="p-5 text-right">
+                      <button 
+                         onClick={() => { setSelectedSchema(token); setActivationLogs([]); }}
+                         className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 shadow-[0_2px_4px_rgba(0,0,0,0.5)] px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95 flex items-center gap-2 ml-auto"
+                      >
+                         Inspect <ChevronRight size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+        </SkeuoCard>
+
+        {/* SCHEMA INSPECTOR & ACTIVATION MODAL
+            Rendered inside the view so it obeys the mobile device constraints
+        */}
+        {selectedSchema && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md rounded-[2rem] animate-in fade-in">
+             <SkeuoCard className="w-full max-w-lg max-h-full flex flex-col border-t-cyan-500/50 border-l-cyan-500/50 shadow-[0_20px_50px_rgba(0,0,0,0.9)]">
+                
+                {/* Modal Header */}
+                <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                   <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-cyan-900/50 border border-cyan-500/30 flex items-center justify-center shadow-inner">
+                         <FileJson className="text-cyan-400" size={20} />
+                      </div>
+                      <div>
+                         <h3 className="text-white font-black tracking-widest uppercase text-sm">Schema Node</h3>
+                         <p className="text-xs text-cyan-400 font-mono">{selectedSchema.symbol}</p>
+                      </div>
+                   </div>
+                   <button onClick={() => setSelectedSchema(null)} className="text-slate-500 hover:text-white bg-black/50 p-2 rounded-full border border-white/5 transition-colors">
+                      <X size={20} />
+                   </button>
+                </div>
+
+                {/* JSON Data Screen */}
+                <SkeuoScreen className="flex-1 overflow-auto custom-scrollbar mb-4 bg-slate-950 border-slate-800">
+                   <pre className="text-[10px] sm:text-xs text-cyan-100/80 font-mono leading-relaxed">
+                      {JSON.stringify(generateSchemaData(selectedSchema), null, 2)}
+                   </pre>
+                </SkeuoScreen>
+
+                {/* Activation Terminal (Visible when activating) */}
+                {activationLogs.length > 0 && (
+                   <SkeuoScreen className="mb-4 bg-black border-emerald-900/50 h-24 overflow-hidden flex flex-col justify-end p-3">
+                      <div className="space-y-1">
+                         {activationLogs.map((log, i) => (
+                           <div key={i} className="text-[10px] text-emerald-400 font-mono tracking-widest">{log}</div>
+                         ))}
+                         {isActivating && <div className="text-[10px] text-emerald-400 font-mono animate-pulse">_</div>}
+                      </div>
+                   </SkeuoScreen>
+                )}
+
+                {/* Modal Actions */}
+                <div className="mt-auto pt-2">
+                   {selectedSchema.status === 'Active' ? (
+                      <div className="bg-emerald-900/30 border border-emerald-500/30 rounded-xl p-3 flex items-center justify-center gap-3 shadow-inner">
+                         <LED color="green" pulse/>
+                         <span className="text-emerald-400 font-bold uppercase tracking-widest text-sm">Protocol Active</span>
+                      </div>
+                   ) : (
+                      <SkeuoButton 
+                        onClick={handleActivateProtocol} 
+                        disabled={isActivating} 
+                        color="amber" 
+                        className="w-full"
+                      >
+                         {isActivating ? <Loader2 size={18} className="animate-spin" /> : <TerminalSquare size={18} />}
+                         {isActivating ? 'SYNCING...' : 'ACTIVATE PROTOCOL'}
+                      </SkeuoButton>
+                   )}
+                </div>
+             </SkeuoCard>
+          </div>
+        )}
+
+      </div>
+    );
+  };
+
+  const MintView = () => {
+    const [formData, setFormData] = useState({ name: '', symbol: '', category: 'Physical Sciences', minVal: '', maxVal: '' });
+
+    const handleGenerateToken = async () => {
+      if (!aiPrompt.trim()) return;
+      setIsGenerating(true);
+      const prompt = `Generate JSON object for magnitude token: '${aiPrompt}'. Fields: name, symbol (upper max 8), category (from list), minVal, maxVal. ONLY JSON.`;
+      const result = await callGemini(prompt);
+      if (result) {
+        try {
+          const parsed = JSON.parse(result.replace(/```json/g, '').replace(/```/g, '').trim());
+          setFormData({ ...formData, ...parsed });
+          addNotification('Parameters Synced via AI');
+        } catch (e) { addNotification('Sync Error', 'error'); }
+      }
+      setIsGenerating(false);
+    };
+
+    return (
+      <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500">
+         <div className="text-center mb-8">
+            <h1 className="text-3xl font-extrabold text-white tracking-tight drop-shadow-md">ASMT Forge</h1>
+            <p className="text-indigo-300/80 font-medium text-sm mt-2 uppercase tracking-widest">Construct New Planetary Units</p>
+         </div>
+
+         {/* AI Generator Panel */}
+         <SkeuoCard className="border-t-indigo-400 border-l-indigo-400">
+            <div className="flex items-center justify-between mb-4">
+               <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 rounded-full bg-indigo-900 border border-indigo-400 shadow-inner flex items-center justify-center">
+                    <Cpu className="text-indigo-400" size={20} />
+                 </div>
+                 <h3 className="text-white font-bold tracking-widest uppercase text-sm">Neural Constructor</h3>
+               </div>
+               <LED color="blue" pulse={isGenerating}/>
+            </div>
+            <SkeuoScreen className="flex gap-3 p-2 bg-black">
+              <input 
+                type="text" 
+                placeholder="> Describe measurement vector..." 
+                className="flex-1 bg-transparent text-sm font-mono text-indigo-200 placeholder-indigo-800 focus:outline-none px-2"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+              />
+              <SkeuoButton onClick={handleGenerateToken} disabled={isGenerating} color="indigo" className="text-xs py-2 px-4">
+                {isGenerating ? 'PROCESSING...' : 'ENGAGE'}
+              </SkeuoButton>
+            </SkeuoScreen>
+         </SkeuoCard>
+
+         <SkeuoCard>
+           <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); addNotification('Smart Contract Initiated'); }}>
+              {/* Hardware-like Grid Form */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-black/40 rounded-2xl border border-white/5 shadow-inner">
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><div className="w-1 h-1 bg-slate-500 rounded-full"/> Node Name</label>
+                      <SkeuoScreen className="p-0 border-slate-700"><input type="text" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-transparent p-3 text-white font-bold outline-none" /></SkeuoScreen>
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><div className="w-1 h-1 bg-slate-500 rounded-full"/> Ticker Symbol</label>
+                      <SkeuoScreen className="p-0 border-slate-700"><input type="text" value={formData.symbol} onChange={e=>setFormData({...formData, symbol: e.target.value})} className="w-full bg-transparent p-3 text-emerald-400 font-mono font-bold outline-none uppercase" /></SkeuoScreen>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><div className="w-1 h-1 bg-slate-500 rounded-full"/> Domain Classification</label>
+                      <SkeuoScreen className="p-0 border-slate-700">
+                        <select value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})} className="w-full bg-transparent p-3 text-white font-bold outline-none appearance-none cursor-pointer">
+                            {categories.filter(c=>c!=='All').map(c => <option key={c} value={c} className="bg-slate-900">{c}</option>)}
+                        </select>
+                      </SkeuoScreen>
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><div className="w-1 h-1 bg-slate-500 rounded-full"/> Min Threshold</label>
+                      <SkeuoScreen className="p-0 border-slate-700"><input type="number" value={formData.minVal} onChange={e=>setFormData({...formData, minVal: e.target.value})} className="w-full bg-transparent p-3 text-white font-mono outline-none" /></SkeuoScreen>
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><div className="w-1 h-1 bg-slate-500 rounded-full"/> Max Capacity</label>
+                      <SkeuoScreen className="p-0 border-slate-700"><input type="number" value={formData.maxVal} onChange={e=>setFormData({...formData, maxVal: e.target.value})} className="w-full bg-transparent p-3 text-white font-mono outline-none" /></SkeuoScreen>
+                  </div>
+              </div>
+
+              {/* Power / Collateral Sector */}
+              <div className="bg-indigo-900/30 border border-indigo-500/50 rounded-2xl p-6 relative overflow-hidden shadow-[inset_0_0_30px_rgba(99,102,241,0.2)]">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 blur-[50px] pointer-events-none"></div>
+                  <div className="flex justify-between items-center mb-4 relative z-10">
+                      <div className="flex items-center gap-2">
+                         <Power size={20} className="text-indigo-400"/>
+                         <h3 className="text-white font-bold uppercase tracking-widest text-sm">Collateral Lock</h3>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-indigo-300 bg-black/50 px-3 py-1 rounded shadow-inner border border-white/5">Vault: {wallet.scalarBalance}</span>
+                  </div>
+                  <SkeuoScreen className="p-1 mb-3 relative z-10">
+                    <input type="number" placeholder="Enter SCALAR amount..." className="w-full bg-transparent p-3 text-2xl font-mono text-white text-center outline-none" />
+                  </SkeuoScreen>
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-indigo-400/60 relative z-10">
+                     <span>Gas: 0.004 SC</span>
+                     <span>Mainnet Auth</span>
+                  </div>
+              </div>
+
+              <SkeuoButton type="submit" color="indigo" className="w-full py-4 text-lg">
+                  <Cpu size={24} /> INITIALIZE CREATION PROTOCOL
+              </SkeuoButton>
+           </form>
+         </SkeuoCard>
+      </div>
+    );
+  };
+
+  const HarvestView = () => {
+    const [optimizing, setOptimizing] = useState(false);
+
+    const handleOptimize = async (nodeId) => {
+      setOptimizing(true);
+      await new Promise(r => setTimeout(r, 1500)); // Simulate hardware physical process
+      addNotification(`Node ${nodeId} HEICEM parameters optimized.`);
+      setOptimizing(false);
+    };
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
+            <div>
+              <h1 className="text-3xl font-extrabold text-white tracking-tight drop-shadow-md flex items-center gap-3">
+                <Leaf className="text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,1)]" size={28} /> Harvest Grid
+              </h1>
+              <p className="text-emerald-200/70 font-medium text-sm mt-1 uppercase tracking-widest">Aetherios IoT Node Manager</p>
+            </div>
+            
+            {/* Skeuomorphic Safety Switch */}
+            <div className="bg-slate-800 border border-slate-600 rounded-xl p-2 shadow-[0_5px_10px_rgba(0,0,0,0.5)] flex items-center gap-4">
+                <div className="px-2 text-xs font-black text-slate-400 uppercase tracking-widest">Sentinel</div>
+                <div className="w-16 h-8 bg-black/80 rounded-lg shadow-inner border border-black p-1 relative cursor-pointer">
+                    <div className="w-1/2 h-full bg-emerald-500 rounded border-t-2 border-emerald-300 border-b-2 border-emerald-700 shadow-[0_0_10px_rgba(16,185,129,0.8)] absolute right-1"></div>
+                </div>
+            </div>
+         </div>
+
+         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {HARVEST_NODES.map((node) => (
+               <SkeuoCard key={node.id} className="border-t-emerald-500/50 border-l-emerald-500/50 flex flex-col justify-between">
+                  {/* Physical Hardware Header */}
+                  <div className="flex justify-between items-start border-b border-white/10 pb-4 mb-6">
+                     <div>
+                        <div className="flex items-center gap-3 mb-1">
+                           <LED color={node.status === 'Online' ? 'green' : 'yellow'} pulse={node.status !== 'Online'} />
+                           <h3 className="text-2xl font-black text-white font-mono tracking-widest">{node.id}</h3>
+                        </div>
+                        <p className="text-xs font-bold uppercase tracking-widest text-emerald-400/60 ml-6">{node.type}</p>
+                     </div>
+                     <div className="text-right bg-black/60 p-3 rounded-xl border border-black shadow-inner min-w-[100px]">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">HEICEM</p>
+                        <p className="text-3xl font-black text-emerald-400 font-mono drop-shadow-[0_0_5px_rgba(52,211,153,0.8)]">{node.coEvolScore}</p>
+                     </div>
+                  </div>
+
+                  {/* Physical Readouts */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                      <SkeuoScreen className="flex flex-col items-center justify-center py-4">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Yield Rate</span>
+                          <span className="text-xl font-bold text-white font-mono">12.5 <span className="text-xs text-emerald-500">KJ/h</span></span>
+                      </SkeuoScreen>
+                      <SkeuoScreen className="flex flex-col items-center justify-center py-4">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Resonance</span>
+                          <span className="text-xl font-bold text-white font-mono">432 <span className="text-xs text-cyan-500">Hz</span></span>
+                      </SkeuoScreen>
+                  </div>
+
+                  <SkeuoButton 
+                    onClick={() => handleOptimize(node.id)}
+                    disabled={optimizing}
+                    color="emerald"
+                    className="w-full"
+                  >
+                    {optimizing ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                    ENGAGE ALIGNMENT
+                  </SkeuoButton>
+               </SkeuoCard>
+            ))}
+         </div>
+      </div>
+    );
+  };
+
+  const BioMonitorView = () => {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+         <div className="mb-8">
+            <h1 className="text-3xl font-extrabold text-white tracking-tight drop-shadow-md flex items-center gap-3">
+              <HeartPulse className="text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.8)]" size={28} /> Bio-State Systems
+            </h1>
+            <p className="text-rose-200/70 font-medium text-sm mt-1 uppercase tracking-widest">Thermodynamic Recursion Telemetry</p>
+         </div>
+
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Entropy Dial - Physical Look */}
+            <SkeuoCard className="border-t-rose-500/50 flex flex-col items-center justify-center p-8">
+               <h3 className="text-xs font-black text-rose-400/80 uppercase tracking-widest mb-8 text-center border-b border-rose-500/20 pb-2 w-full">Entropy Production (dS/dt)</h3>
+               
+               <div className="relative w-48 h-48 rounded-full border-[12px] border-slate-900 shadow-[0_10px_20px_rgba(0,0,0,0.6),_inset_0_2px_5px_rgba(255,255,255,0.1)] flex items-center justify-center bg-black/50">
+                  <div className="absolute inset-2 rounded-full border-4 border-rose-900/50"></div>
+                  {/* Gauge Tick Marks */}
+                  <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxkZWZzPjxwYXR0ZXJuIGlkPSJ0aWNrcyIgd2lkdGg9IjIwIiBoZWlnaHQ9IjIwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48bGluZSB4MT0iMTAiIHkxPSIwIiB4Mj0iMTAiIHkyPSI1IiBzdHJva2U9IiMzMzMiIHN0cm9rZS13aWR0aD0iMiIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCN0aWNrcykiLz48L3N2Zz4=')] opacity-20 rounded-full"></div>
+                  
+                  {/* Glowing Needle / Core */}
+                  <div className="z-10 w-24 h-24 rounded-full bg-gradient-to-br from-rose-600 to-rose-900 flex items-center justify-center shadow-[0_0_30px_rgba(244,63,94,0.6),_inset_0_5px_10px_rgba(255,255,255,0.3)] border border-rose-400 relative">
+                     <div className="absolute top-[-10px] w-2 h-6 bg-rose-300 rounded shadow-[0_0_10px_white]"></div>
+                     <span className="text-white font-black text-xl tracking-widest drop-shadow-md">HIGH</span>
+                  </div>
+               </div>
+               
+               <div className="mt-8 bg-black/60 px-6 py-3 rounded-xl border border-rose-500/30 text-center shadow-inner w-full">
+                  <LED color="red" pulse className="mx-auto mb-2"/>
+                  <p className="text-xs font-bold text-rose-300 uppercase tracking-widest">Dissipative Stress Detected</p>
+               </div>
+            </SkeuoCard>
+
+            {/* Recursion Cylinder */}
+            <SkeuoCard className="border-t-indigo-500/50 flex flex-col justify-between p-8">
+               <h3 className="text-xs font-black text-indigo-400/80 uppercase tracking-widest mb-6 text-center border-b border-indigo-500/20 pb-2">Autophagy Recursion</h3>
+               
+               <div className="flex-1 flex items-center justify-center gap-8">
+                   {/* Liquid Cylinder effect */}
+                   <div className="w-16 h-48 bg-black/80 rounded-full border-4 border-slate-800 shadow-[inset_0_0_20px_rgba(0,0,0,1)] relative overflow-hidden flex items-end p-1">
+                      {/* Measurement lines */}
+                      <div className="absolute inset-y-0 left-0 w-2 border-r-2 border-white/10 z-20 flex flex-col justify-between py-2">
+                          {[1,2,3,4,5].map(i => <div key={i} className="w-2 border-b-2 border-white/10"></div>)}
+                      </div>
+                      
+                      {/* Fluid */}
+                      <div className="w-full bg-gradient-to-t from-indigo-800 to-indigo-400 rounded-full relative shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all duration-1000" style={{height: '12%'}}>
+                          <div className="absolute top-0 w-full h-2 bg-indigo-300/50 rounded-full"></div>
+                      </div>
+                   </div>
+
+                   <div className="flex flex-col gap-4">
+                       <SkeuoScreen className="py-4 px-6 text-center">
+                          <p className="text-5xl font-black text-indigo-400 font-mono drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]">12<span className="text-xl">%</span></p>
+                       </SkeuoScreen>
+                       <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 text-center shadow-[0_4px_6px_rgba(0,0,0,0.3)]">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">State</p>
+                          <p className="text-sm font-bold text-white uppercase tracking-wide">mTOR Growth</p>
+                       </div>
+                   </div>
+               </div>
+
+               <SkeuoButton color="indigo" className="w-full mt-6">
+                  <Thermometer size={18} /> INITIATE FASTING PROTOCOL
+               </SkeuoButton>
+            </SkeuoCard>
+         </div>
+      </div>
+    );
+  };
+
+  const GovernanceView = () => {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500 flex flex-col items-center justify-center h-[60vh] text-center">
+         <Vote size={64} className="text-slate-600 mb-4 drop-shadow-md" />
+         <h2 className="text-2xl font-black text-white tracking-widest uppercase">Ring Council</h2>
+         <p className="text-slate-400 font-medium">Governance module requires higher security clearance.</p>
+         <SkeuoButton color="slate" className="mt-4"><Fingerprint size={16}/> Authenticate Identity</SkeuoButton>
+      </div>
+    );
+  };
+
+  const DevConsoleView = () => {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500 flex flex-col items-center justify-center h-[60vh] text-center">
+         <Code size={64} className="text-indigo-900/50 mb-4" />
+         <h2 className="text-2xl font-black text-slate-500 tracking-widest uppercase">Dev Interface</h2>
+         <p className="text-slate-600 font-medium">Terminal access restricted in current format.</p>
+      </div>
+    );
+  };
+
+  // --- RESPONSIVE OUTER SHELL ---
+  // Conditionally applies the mobile "device" frame or full web screen.
+
+  const renderContent = () => (
+    <div className="flex h-full w-full bg-slate-950 font-sans text-gray-100 overflow-hidden relative selection:bg-indigo-500/30 selection:text-indigo-200">
+      
+      {/* Heavy Mesh / Radial Background */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-black to-black">
+          {/* Subtle colored orbs */}
+          <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-900/20 blur-[100px] mix-blend-screen" />
+          <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] rounded-full bg-emerald-900/10 blur-[100px] mix-blend-screen" />
+          {/* Physical texture overlay */}
+          <div className="absolute inset-0 opacity-[0.015]" style={{backgroundImage: `repeating-linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), repeating-linear-gradient(45deg, #000 25%, #222 25%, #222 75%, #000 75%, #000)`, backgroundPosition: `0 0, 2px 2px`, backgroundSize: `4px 4px`}}></div>
+      </div>
+      
+      {/* Sidebar - Web Only */}
+      {appFormat === 'web' && (
+        <aside className="relative z-50 w-72 bg-black/60 backdrop-blur-3xl border-r border-white/10 flex flex-col shadow-[10px_0_30px_rgba(0,0,0,0.8)]">
+          {/* Logo Plate */}
+          <div className="p-6 flex items-center gap-4 border-b-2 border-black shadow-[0_2px_5px_rgba(255,255,255,0.05)] bg-gradient-to-b from-white/5 to-transparent">
+             <div className="w-12 h-12 relative flex items-center justify-center rounded-full bg-black border-[3px] border-slate-800 shadow-[inset_0_2px_5px_rgba(0,0,0,1),_0_2px_4px_rgba(255,255,255,0.1)] overflow-hidden">
+                <style>
+                    {`@keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}
+                </style>
+                <svg className="w-[120%] h-[120%] text-indigo-500 drop-shadow-[0_0_5px_rgba(99,102,241,1)]" viewBox="0 0 100 100" fill="none" style={{ animation: 'spin-slow 8s linear infinite' }}>
+                    <circle cx="50" cy="50" r="4" fill="white" />
+                    <path d="M10 50 Q 30 30 50 50 T 90 50" stroke="currentColor" strokeWidth="3" />
+                    <path d="M10 50 Q 30 70 50 50 T 90 50" stroke="currentColor" strokeWidth="3" transform="rotate(45 50 50)" />
+                    <path d="M10 50 Q 30 30 50 50 T 90 50" stroke="currentColor" strokeWidth="3" transform="rotate(90 50 50)" />
+                    <path d="M10 50 Q 30 70 50 50 T 90 50" stroke="currentColor" strokeWidth="3" transform="rotate(135 50 50)" />
+                </svg>
+             </div>
+             <span className="text-2xl font-black tracking-[0.2em] text-white drop-shadow-md">SCALARS</span>
+          </div>
+
+          {/* Navigation Controls */}
+          <div className="px-4 py-6 space-y-2 flex-1 overflow-y-auto">
+            <div className="mb-2 pl-2 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Core Systems</div>
+            <NavItem id="dashboard" label="Command Center" icon={Activity} />
+            <NavItem id="registry" label="Global Registry" icon={Database} />
+            <NavItem id="mint" label="ASMT Forge" icon={Cpu} />
+            <NavItem id="governance" label="Ring Council" icon={Vote} />
+            
+            <div className="mt-8 mb-2 pl-2 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Planetary Modules</div>
+            <NavItem id="harvest" label="Harvest Grid" icon={Leaf} />
+            <NavItem id="bio" label="Bio-State" icon={HeartPulse} />
+            <NavItem id="dev" label="Dev Console" icon={Terminal} />
+          </div>
+          
+          {/* Identity Plate */}
+          <div className="p-4 bg-black/80 border-t-2 border-slate-800">
+               <div className="flex items-center gap-4 bg-slate-900 border border-slate-700 p-3 rounded-2xl shadow-inner cursor-pointer hover:bg-slate-800 transition-colors">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 border-2 border-black shadow-[0_0_10px_rgba(255,255,255,0.2)]"></div>
+                  <div>
+                      <p className="text-xs font-bold text-white uppercase tracking-widest">Architect Node</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <LED color="green" />
+                        <p className="text-[10px] text-slate-400 font-mono">0x71C...9A23</p>
+                      </div>
+                  </div>
+               </div>
+          </div>
+        </aside>
+      )}
+
+      {/* Main App Content Area */}
+      <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
+        {/* Header Strip */}
+        <header className="h-16 bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 flex items-center justify-between px-6 z-40 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+             {appFormat === 'mobile' && (
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-500/50">
+                  <Activity className="text-indigo-400" size={16} />
+                </div>
+             )}
+          </div>
+          
+          <div className="ml-auto flex items-center gap-4">
+             <div className="flex items-center px-4 py-1.5 bg-black/60 rounded-full border border-black shadow-[inset_0_1px_2px_rgba(255,255,255,0.1)]">
+                <LED color="green" pulse className="mr-2" />
+                <span className="text-[10px] font-black tracking-widest uppercase text-slate-300">Cymos Mainnet</span>
+             </div>
+             {appFormat === 'web' && (
+               <button className="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg hover:bg-slate-700 transition-colors">
+                  <Settings size={18} className="text-slate-300" />
+               </button>
+             )}
+          </div>
+        </header>
+
+        {/* Scrollable Viewport */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 relative custom-scrollbar pb-24 md:pb-8">
+           <div className="max-w-6xl mx-auto h-full">
+             {activeTab === 'dashboard' && <DashboardView />}
+             {activeTab === 'registry' && <RegistryView />}
+             {activeTab === 'mint' && <MintView />}
+             {activeTab === 'governance' && <GovernanceView />}
+             {activeTab === 'harvest' && <HarvestView />}
+             {activeTab === 'bio' && <BioMonitorView />}
+             {activeTab === 'dev' && <DevConsoleView />}
+           </div>
+        </main>
+
+        {/* Mobile Bottom Dock - Skeuomorphic */}
+        {appFormat === 'mobile' && (
+          <div className="absolute bottom-4 left-4 right-4 h-20 bg-black/80 backdrop-blur-2xl border-t border-l border-white/20 border-b border-r border-black/80 rounded-[2rem] shadow-[0_15px_30px_rgba(0,0,0,0.8),_inset_0_2px_5px_rgba(255,255,255,0.1)] flex items-center justify-around px-2 z-50">
+             <MobileNavBtn id="dashboard" icon={Activity} label="CMD" />
+             <MobileNavBtn id="registry" icon={Database} label="DATA" />
+             <div className="-mt-10">
+                {/* Huge physical center button for Mint */}
+                <button onClick={()=>setActiveTab('mint')} className="w-16 h-16 rounded-full bg-gradient-to-b from-indigo-500 to-indigo-700 border-[4px] border-slate-900 shadow-[0_10px_20px_rgba(0,0,0,0.8),_inset_0_2px_5px_rgba(255,255,255,0.4)] flex items-center justify-center active:scale-95 transition-transform">
+                  <Zap size={24} className="text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" />
+                </button>
+             </div>
+             <MobileNavBtn id="harvest" icon={Leaf} label="NODES" />
+             <MobileNavBtn id="bio" icon={HeartPulse} label="BIO" />
+          </div>
+        )}
+      </div>
+
+      {/* Notifications */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] space-y-2 pointer-events-none">
+        {notifications.map(n => (
+            <div key={n.id} className="bg-emerald-900/90 backdrop-blur-xl border-2 border-emerald-500 shadow-[0_10px_30px_rgba(0,0,0,0.5)] text-white px-6 py-3 rounded-full flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300">
+                <LED color="green" pulse />
+                <span className="text-xs font-black uppercase tracking-widest">{n.msg}</span>
+            </div>
+        ))}
+      </div>
+      
+    </div>
+  );
+
+  // --- RENDER APP SHELL ---
+  return (
+    <div className="w-full h-screen bg-[#0a0a0a] flex items-center justify-center overflow-hidden font-sans">
+       
+       {/* Device Toggle Floating Controls */}
+       <div className="fixed top-4 right-4 z-[999] flex gap-1 p-1.5 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl">
+          <button 
+            onClick={() => setAppFormat('web')} 
+            className={`p-2.5 rounded-xl transition-all ${appFormat === 'web' ? 'bg-indigo-600 text-white shadow-inner' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            title="Desktop Interface"
+          >
+             <Monitor size={18} />
+          </button>
+          <button 
+            onClick={() => setAppFormat('mobile')} 
+            className={`p-2.5 rounded-xl transition-all ${appFormat === 'mobile' ? 'bg-indigo-600 text-white shadow-inner' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            title="Mobile Interface"
+          >
+             <Smartphone size={18} />
+          </button>
+       </div>
+
+       {/* Outer Frame (Simulates Device constraints if mobile) */}
+       <div 
+         className={`relative overflow-hidden bg-black transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
+           ${appFormat === 'mobile' 
+             ? 'w-[400px] h-[850px] rounded-[3.5rem] border-[14px] border-slate-900 shadow-[0_20px_50px_rgba(0,0,0,0.8),_0_0_0_2px_rgba(255,255,255,0.1)] ring-8 ring-black' 
+             : 'w-full h-full rounded-none border-0'
+           }`
+         }
+       >
+          {/* Dynamic Notch for mobile */}
+          {appFormat === 'mobile' && (
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-7 bg-slate-900 rounded-b-3xl z-[100] flex justify-center items-end pb-1 shadow-inner">
+               <div className="w-16 h-1.5 bg-black rounded-full opacity-50"></div>
+            </div>
+          )}
+
+          {renderContent()}
+       </div>
+
+       <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+      `}} />
+    </div>
+  );
+}
+
+
